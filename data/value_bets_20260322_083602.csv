@@ -1,0 +1,4 @@
+match,home_team,away_team,date,outcome,model_probability,bookmaker_odds,bookmaker_probability,edge,expected_value,kelly_stake_pct,confidence
+Aston Villa FC vs West Ham United FC,Aston Villa FC,West Ham United FC,2026-03-22 14:15:00+00:00,Away Win,0.42657923698425293,5.0,0.2,0.22657923698425292,1.1328961849212646,7.080601155757904,0.42657923698425293
+Tottenham Hotspur FC vs Nottingham Forest FC,Tottenham Hotspur FC,Nottingham Forest FC,2026-03-22 14:15:00+00:00,Away Win,0.5848814845085144,3.1,0.3225806451612903,0.2623008393472241,0.8131326019763947,9.680150023528508,0.5848814845085144
+Aston Villa FC vs West Ham United FC,Aston Villa FC,West Ham United FC,2026-03-22 14:15:00+00:00,Draw,0.3422539234161377,4.1,0.24390243902439027,0.09835148439174743,0.4032410860061644,3.2519442419851967,0.42657923698425293

@@ -1,0 +1,2 @@
+match,home_team,away_team,date,outcome,model_probability,bookmaker_odds,bookmaker_probability,edge,expected_value,kelly_stake_pct,confidence
+Tottenham Hotspur FC vs Crystal Palace FC,Tottenham Hotspur FC,Crystal Palace FC,2026-03-05 20:00:00+00:00,Away Win,0.5848814845085144,3.1,0.3225806451612903,0.2623008393472241,0.8131326019763947,9.680150023528508,0.5848814845085144
