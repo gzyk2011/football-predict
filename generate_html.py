@@ -440,9 +440,7 @@ html += f"""
             </div>
             
             <p style="margin-top: 20px;">
-                <a href="https://github.com/thedatadoktor/prediict" style="color: white; text-decoration: none;">
-                    📊 View Full System on GitHub →
-                </a>
+
             </p>
         </div>
     </div>
