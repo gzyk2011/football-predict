@@ -45,6 +45,10 @@ jobs:
           echo "PYTHONPATH is: $PYTHONPATH"
           echo "Working directory is: $(pwd)"
           ls -la src/data/
+          
+          # === 新增这一行：让机器人在预测前，先花点时间把模型训练出来 ===
+          python main.py --train
+          
           # 可以在这里把你关心的联赛全加上，比如 PL,SA,PD,UCL,J1
           python main.py --predict --odds --leagues PL,SA,PD,BL1,FL1,UCL --days 7
       
