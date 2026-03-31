@@ -7,6 +7,7 @@ import sys
 import os
 from pathlib import Path
 import pandas as pd
+import requests  # 新增：用于发送网络请求到 PushPlus
 
 # Add src to path - try multiple approaches for compatibility
 script_dir = Path(__file__).parent.resolve()
@@ -303,12 +304,55 @@ def make_predictions(args):
             else:
                 print("No value bets found with current criteria.")
         else:
-            print("Could not fetch odds data. Check your ODDS_API_KEY in .env")
+            print("Could not fetch odds data. Check your API settings.")
     else:
         print("\n" + "="*80)
         print("NOTE: Add --odds flag to fetch bookmaker odds and identify value bets")
-        print("Get free API key from: https://the-odds-api.com/")
         print("="*80 + "\n")
+
+    # ==========================================
+    # 新增：PushPlus 微信自动推送逻辑
+    # ==========================================
+    push_token = os.getenv("PUSHPLUS_TOKEN", "")
+    if push_token:
+        print("\n" + "="*80)
+        print("正在生成报告并推送到微信 (PushPlus)...")
+        print("="*80)
+        
+        # 组装 HTML 格式的推送内容
+        push_html = "<h2>🔥 高胜率预测 (High Confidence)</h2>"
+        if not pred_df.empty:
+            push_html += pred_df.to_html(index=False, border=1, justify="center")
+        else:
+            push_html += "<p>今日暂无高胜率比赛。</p>"
+
+        if args.odds:
+            push_html += "<h2>💰 今日价值投注 (Value Bets)</h2>"
+            # 确保 value_df 存在且不为空
+            if 'value_df' in locals() and not value_df.empty:
+                push_html += value_df.to_html(index=False, border=1, justify="center")
+            else:
+                push_html += "<p>今日暂无盘口漏洞 / 价值投注机会。</p>"
+        
+        # 请求参数
+        push_url = "http://www.pushplus.plus/send"
+        push_data = {
+            "token": push_token,
+            "title": f"⚽ 足球 AI 预测日报 ({pd.Timestamp.now().strftime('%m-%d')})",
+            "content": push_html,
+            "template": "html"
+        }
+        
+        try:
+            res = requests.post(push_url, json=push_data)
+            if res.status_code == 200 and res.json().get("code") == 200:
+                print("✓ 成功：预测报告已成功推送到您的微信！\n")
+            else:
+                print(f"⚠️ PushPlus 推送失败，返回信息: {res.text}\n")
+        except Exception as e:
+            print(f"⚠️ PushPlus 网络请求报错: {e}\n")
+    else:
+        print("\n📝 未在 .env 或环境变量中检测到 PUSHPLUS_TOKEN，跳过微信推送。\n")
 
 
 def run_backtest(args):
@@ -413,7 +457,7 @@ Examples:
     parser.add_argument("--start-date", type=str, help="Backtest start date (YYYY-MM-DD)")
     parser.add_argument("--end-date", type=str, help="Backtest end date (YYYY-MM-DD)")
     parser.add_argument("--odds", action="store_true", 
-                       help="Fetch bookmaker odds and identify value bets (requires ODDS_API_KEY)")
+                       help="Fetch bookmaker odds and identify value bets")
     
     args = parser.parse_args()
     
