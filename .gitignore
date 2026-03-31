@@ -11,18 +11,22 @@ ENV/
 # Environment variables
 .env
 
-# Data files (but not src/data source code)
+# Data files
 /data/*
 !data/value_bets_*.csv
 !data/football_matches_historical.csv
 *.db
 *.sqlite
 
-# Model files (but not src/models source code)
-/models/
+# --- 修改后的模型文件规则 ---
+# 允许提交 models 目录
+# /models/  <-- 删掉这一行或注释掉，允许文件夹进入版本控制
+!models/
+# 允许提交 .joblib 模型文件
+# *.joblib <-- 删掉这一行，允许模型文件被推送
+!models/*.joblib
 *.pkl
 *.h5
-*.joblib
 
 # IDE
 .vscode/
