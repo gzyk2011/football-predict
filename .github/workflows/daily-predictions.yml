@@ -46,11 +46,11 @@ jobs:
           echo "Working directory is: $(pwd)"
           ls -la src/data/
           
-          # === 新增这一行：让机器人在预测前，先花点时间把模型训练出来 ===
+          # === 第一步：让机器人尝试训练（如果 src/models 已有模型，会自动跳过） ===
           python main.py --train
           
-          # 可以在这里把你关心的联赛全加上，比如 PL,SA,PD,UCL,J1
-          python main.py --predict --odds --leagues PL,SA,PD,BL1,FL1,UCL --days 7
+          # === 第二步：执行预测并发送推送（这里建议把 leagues 参数写全，或者保持原样） ===
+          python main.py --predict --odds --leagues PL,SA,PD,BL1,FL1,UCL --days 3
       
       - name: Generate HTML page
         run: |
@@ -60,5 +60,9 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-          git add index.html data/value_bets_*.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Auto-update predictions $(date +%Y-%m-%d)" && git push)
+          
+          # 【核心修改】：明确告诉 Git 要把 src/models/ 里的模型文件也带上
+          git add index.html data/*.csv src/models/*.joblib
+          
+          # 检查是否有变化并提交
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动更新预测结果并保存永久模型 $(date +%Y-%m-%d)" && git push)
