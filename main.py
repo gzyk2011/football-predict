@@ -7,7 +7,7 @@ import sys
 import os
 from pathlib import Path
 import pandas as pd
-import requests  # 新增：用于发送网络请求到 PushPlus
+import requests  # 用于发送网络请求到 PushPlus
 
 # Add src to path - try multiple approaches for compatibility
 script_dir = Path(__file__).parent.resolve()
@@ -97,105 +97,86 @@ def collect_data(args):
 
 
 def train_models(args):
-    """Train prediction models"""
+    """Train prediction models - Skip if models already exist (Permanent Memory)"""
+    import joblib
+    
+    # 1. 定义核心模型文件路径
+    xgb_path = config.MODELS_DIR / "xgboost_model.joblib"
+    lgb_path = config.MODELS_DIR / "lightgbm_model.joblib"
+    engineer_path = config.MODELS_DIR / "feature_engineer.joblib"
+    
+    # 2. 检查模型是否已经存在
+    if xgb_path.exists() and lgb_path.exists() and engineer_path.exists():
+        print("\n" + "="*80)
+        print("✅ 永久记忆模式：检测到现有模型文件，直接跳过训练。")
+        print("🚀 系统将直接进入预测环节。")
+        print("💡 提示：若需强制重练模型，请手动删除仓库 models/ 文件夹下的 .joblib 文件。")
+        print("="*80 + "\n")
+        return
+
+    # 3. 如果模型不存在，则执行大规模训练
     print("\n" + "="*80)
-    print("TRAINING MODELS")
+    print("首次运行或模型缺失，正在开始全联赛数据采集与模型训练...")
+    print("这可能需要较长时间（约 20 分钟），请耐心等待。")
     print("="*80 + "\n")
     
-    # Load data - try historical CSV first, then API data
-    csv_collector = FootballDataCSVCollector()
-    df = csv_collector.load_data()
+    # 获取历史数据（抓取最近 3 年的数据以保证准确度）
+    collector = FootballDataCollector()
+    leagues = args.leagues.split(",") if args.leagues else ["PL"]
+    current_year = pd.Timestamp.now().year
+    seasons = [current_year - 2, current_year - 1, current_year]
+    
+    df = collector.collect_multiple_seasons(leagues, seasons)
     
     if df.empty:
-        print("No historical CSV data found, trying API data...")
-        api_collector = FootballDataCollector()
-        df = api_collector.load_data()
-    
+        print("❌ 错误：从 API 未采集到训练数据，尝试加载本地数据...")
+        df = collector.load_data()
+        
     if df.empty:
-        print("No data found! Please run --collect-csv or --collect first.")
+        print("❌ 错误：无可用训练数据，训练终止。")
         return
+        
+    collector.save_data(df)
     
-    print(f"Loaded {len(df)} matches")
-    data_source = "CSV historical data" if not df.empty else "API data"
-    print(f"Using: {data_source}\n")
-    
-    if df.empty:
-        print("No data found! Please run --collect first.")
-        return
-    
-    # Preprocess
+    # 执行标准预处理
     preprocessor = DataPreprocessor()
     df_clean = preprocessor.clean_data(df)
     df_encoded = preprocessor.encode_results(df_clean)
     
-    # Create features
+    # 特征工程
     engineer = FeatureEngineer()
     df_features = engineer.create_all_features(df_encoded)
     
     print(f"\nDataset: {len(df_features)} matches with {len(engineer.get_feature_columns())} features")
     
-    # Split data into train, validation, and test
+    # 分割数据集
     train_df, test_df = preprocessor.split_train_test(df_features, test_size=0.2, by_date=True)
-    
-    # Further split training into train and validation for calibration
     val_split_idx = int(len(train_df) * 0.85)
-    train_subset = train_df.iloc[:val_split_idx]
-    val_subset = train_df.iloc[val_split_idx:]
     
-    # Prepare training data
     feature_cols = engineer.get_feature_columns()
-    X_train = train_subset[feature_cols]
-    y_train = train_subset["result"].map({"H": 0, "D": 1, "A": 2}).values
-    
-    X_val = val_subset[feature_cols]
-    y_val = val_subset["result"].map({"H": 0, "D": 1, "A": 2}).values
-    
+    X_train = train_df.iloc[:val_split_idx][feature_cols]
+    y_train = train_df.iloc[:val_split_idx]["result"].map({"H": 0, "D": 1, "A": 2}).values
+    X_val = train_df.iloc[val_split_idx:][feature_cols]
+    y_val = train_df.iloc[val_split_idx:]["result"].map({"H": 0, "D": 1, "A": 2}).values
     X_test = test_df[feature_cols]
     y_test = test_df["result"].map({"H": 0, "D": 1, "A": 2}).values
     
-    print(f"Training set: {len(train_subset)} matches ({train_subset['date'].min()} to {train_subset['date'].max()})")
-    print(f"Validation set: {len(val_subset)} matches ({val_subset['date'].min()} to {val_subset['date'].max()})")
-    print(f"Testing set: {len(test_df)} matches ({test_df['date'].min()} to {test_df['date'].max()})")
-    
-    # Train XGBoost with calibration
-    print("\n" + "-"*80)
+    # 训练 XGBoost
+    print("\n训练 XGBoost 模型...")
     xgb_model = XGBoostModel()
     xgb_model.train(X_train, y_train, X_val, y_val)
-    xgb_results = xgb_model.evaluate(X_test, y_test)
-    print(f"\nXGBoost Test Accuracy: {xgb_results['accuracy']:.2%}")
-    print(f"XGBoost Log Loss: {xgb_results['log_loss']:.3f}")
+    xgb_model.save_model()
     
-    # Train LightGBM with calibration
-    print("\n" + "-"*80)
+    # 训练 LightGBM
+    print("\n训练 LightGBM 模型...")
     lgb_model = LightGBMModel()
     lgb_model.train(X_train, y_train, X_val, y_val)
-    lgb_results = lgb_model.evaluate(X_test, y_test)
-    print(f"\nLightGBM Test Accuracy: {lgb_results['accuracy']:.2%}")
-    print(f"LightGBM Log Loss: {lgb_results['log_loss']:.3f}")
-    
-    # Create ensemble with optimized weights
-    print("\n" + "-"*80)
-    print("\nCreating ensemble model...")
-    ensemble = EnsembleModel(
-        models=[xgb_model, lgb_model],
-        name="ensemble_model"
-    )
-    ensemble_results = ensemble.evaluate(X_test, y_test)
-    print(f"Ensemble Test Accuracy: {ensemble_results['accuracy']:.2%}")
-    print(f"Ensemble Log Loss: {ensemble_results['log_loss']:.3f}")
-    
-    # Save models
-    print("\nSaving models...")
-    xgb_model.save_model()
     lgb_model.save_model()
     
-    # Save feature engineer settings
-    import joblib
-    joblib.dump(engineer, config.MODELS_DIR / "feature_engineer.joblib")
-    print("Feature engineer saved")
+    # 保存特征工程对象
+    joblib.dump(engineer, engineer_path)
     
-    print("\n" + "="*80)
-    print("TRAINING COMPLETE")
+    print("\n🎉 首次训练完成！模型已持久化保存。")
     print("="*80 + "\n")
 
 
@@ -278,6 +259,7 @@ def make_predictions(args):
         print("No high confidence predictions found.")
     
     # Fetch bookmaker odds and identify value bets
+    value_df = pd.DataFrame() # 初始化
     if args.odds:
         print("\n" + "="*80)
         print("FETCHING BOOKMAKER ODDS & IDENTIFYING VALUE BETS")
@@ -311,7 +293,7 @@ def make_predictions(args):
         print("="*80 + "\n")
 
     # ==========================================
-    # 新增：PushPlus 微信自动推送逻辑
+    # PushPlus 微信自动推送逻辑
     # ==========================================
     push_token = os.getenv("PUSHPLUS_TOKEN", "")
     if push_token:
@@ -328,8 +310,7 @@ def make_predictions(args):
 
         if args.odds:
             push_html += "<h2>💰 今日价值投注 (Value Bets)</h2>"
-            # 确保 value_df 存在且不为空
-            if 'value_df' in locals() and not value_df.empty:
+            if not value_df.empty:
                 push_html += value_df.to_html(index=False, border=1, justify="center")
             else:
                 push_html += "<p>今日暂无盘口漏洞 / 价值投注机会。</p>"
@@ -352,7 +333,7 @@ def make_predictions(args):
         except Exception as e:
             print(f"⚠️ PushPlus 网络请求报错: {e}\n")
     else:
-        print("\n📝 未在 .env 或环境变量中检测到 PUSHPLUS_TOKEN，跳过微信推送。\n")
+        print("\n📝 未在环境变量中检测到 PUSHPLUS_TOKEN，跳过微信推送。\n")
 
 
 def run_backtest(args):
@@ -418,44 +399,35 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Collect historical CSV data (RECOMMENDED - more data, free)
-  python main.py --collect-csv --leagues PL --start-season 1819 --end-season 2324
+  # Train models (Run once to save permanent models)
+  python main.py --train --leagues PL,LaLiga,SerieA
   
-  # Collect data from API (limited to current season with free tier)
-  python main.py --collect --leagues PL --seasons 2023
-  
-  # Train models
-  python main.py --train
-  
-  # Make predictions for upcoming matches
-  python main.py --predict --leagues PL --days 7
-  
-  # Run backtest
-  python main.py --backtest --start-date 2023-01-01 --end-date 2024-01-01
+  # Make predictions (Will skip training if models exist)
+  python main.py --train --predict --odds --leagues PL --days 3
         """
     )
     
     # Main actions
     parser.add_argument("--collect-csv", action="store_true", 
-                       help="Collect historical CSV data from football-data.co.uk (FREE, RECOMMENDED)")
+                       help="Collect historical CSV data from football-data.co.uk")
     parser.add_argument("--collect", action="store_true", 
-                       help="Collect data from Football-Data.org API (requires API key)")
+                       help="Collect data from Football-Data.org API")
     parser.add_argument("--train", action="store_true", help="Train prediction models")
     parser.add_argument("--predict", action="store_true", help="Predict upcoming matches")
     parser.add_argument("--backtest", action="store_true", help="Run backtest on historical data")
     
     # Options
     parser.add_argument("--leagues", type=str, 
-                       help="Comma-separated league codes (e.g., PL,LaLiga,SerieA)")
+                       help="Comma-separated league codes")
     parser.add_argument("--seasons", type=str, 
-                       help="Comma-separated season years for API (e.g., 2021,2022,2023)")
+                       help="Comma-separated season years")
     parser.add_argument("--start-season", type=str, 
-                       help="Start season for CSV collection (e.g., 1819 for 2018/19)")
+                       help="Start season for CSV collection")
     parser.add_argument("--end-season", type=str, 
-                       help="End season for CSV collection (e.g., 2324 for 2023/24)")
-    parser.add_argument("--days", type=int, help="Days ahead for upcoming matches (default: 7)")
-    parser.add_argument("--start-date", type=str, help="Backtest start date (YYYY-MM-DD)")
-    parser.add_argument("--end-date", type=str, help="Backtest end date (YYYY-MM-DD)")
+                       help="End season for CSV collection")
+    parser.add_argument("--days", type=int, help="Days ahead for upcoming matches")
+    parser.add_argument("--start-date", type=str, help="Backtest start date")
+    parser.add_argument("--end-date", type=str, help="Backtest end date")
     parser.add_argument("--odds", action="store_true", 
                        help="Fetch bookmaker odds and identify value bets")
     
