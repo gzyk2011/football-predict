@@ -2,12 +2,12 @@ name: Daily Predictions Update
 
 on:
   schedule:
-    # Run daily at 8:00 AM UTC (adjust timezone as needed)
-    - cron: '0 8 */2 * *'
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+    # 每天的 UTC 时间 08:00 (北京时间下午 16:00) 自动运行
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # 允许在网页上手动点击运行
 
 permissions:
-  contents: write  # Allow pushing commits
+  contents: write  # 允许机器人推送代码修改
 
 jobs:
   update-predictions:
@@ -35,16 +35,18 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Run predictions with odds
+      - name: Run predictions with odds and PushPlus
         env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          # 换成了最新的 API-Football 和 PushPlus 密钥
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         run: |
           export PYTHONPATH="${GITHUB_WORKSPACE}:${PYTHONPATH}"
           echo "PYTHONPATH is: $PYTHONPATH"
           echo "Working directory is: $(pwd)"
           ls -la src/data/
-          python main.py --predict --odds --leagues PL --days 7
+          # 可以在这里把你关心的联赛全加上，比如 PL,SA,PD,UCL,J1
+          python main.py --predict --odds --leagues PL,SA,PD,BL1,FL1,UCL --days 7
       
       - name: Generate HTML page
         run: |
