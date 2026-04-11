@@ -1,6 +1,6 @@
 """
 Main Execution Script
-Orchestrates data collection, model training, prediction, and backtesting
+Orchestrates data collection, model training, prediction, 和 backtesting
 """
 import argparse
 import sys
@@ -348,7 +348,7 @@ def make_predictions(args):
         push_url = "http://www.pushplus.plus/send"
         push_data = {
             "token": push_token,
-            "title": f"⚽ AI 核心赛程推荐 ({pd.Timestamp.now().strftime('%m-%d')})",
+            "title": f"价值投注65%+edge15%以上场次推荐 ({pd.Timestamp.now().strftime('%m-%d')})",
             "content": push_html,
             "template": "html"
         }
