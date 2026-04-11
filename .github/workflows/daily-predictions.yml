@@ -45,11 +45,11 @@ jobs:
           # 【极其关键的清理动作】：强制删除昨天遗留的旧预测数据
           rm -f data/value_bets_*.csv
           
-          # 第一步：训练模型 (让 AI 用这 16 个联赛的历史数据来训练最强大脑)
-          python main.py --train --leagues PL,ECH,SA,SB,PD,BL1,FL1,NED,POR,MLS,BRA,ARG,J1,K1,AUS,UCL
+          # 第一步：训练模型 (剔除低质量联赛，专门用欧洲五大联赛+欧冠的精细数据重新训练)
+          python main.py --train --leagues PL,SA,PD,BL1,FL1,UCL
           
-          # 第二步：执行预测并发送推送 (扫描这 16 个联赛的今日漏洞)
-          python main.py --predict --odds --leagues PL,ECH,SA,SB,PD,BL1,FL1,NED,POR,MLS,BRA,ARG,J1,K1,AUS,UCL --days 3
+          # 第二步：执行预测并发送推送 (只扫描核心赛事)
+          python main.py --predict --odds --leagues PL,SA,PD,BL1,FL1,UCL --days 3
       
       - name: Generate HTML page
         run: |
