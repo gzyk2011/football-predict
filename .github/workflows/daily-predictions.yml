@@ -45,10 +45,10 @@ jobs:
           # 【极其关键的清理动作】：强制删除昨天遗留的旧预测数据
           rm -f data/value_bets_*.csv
           
-          # 第一步：训练模型
-          python main.py --train
+          # 第一步：训练模型 (让 AI 用这 16 个联赛的历史数据来训练最强大脑)
+          python main.py --train --leagues PL,ECH,SA,SB,PD,BL1,FL1,NED,POR,MLS,BRA,ARG,J1,K1,AUS,UCL
           
-          # 第二步：执行预测并发送推送 (16个重点联赛)
+          # 第二步：执行预测并发送推送 (扫描这 16 个联赛的今日漏洞)
           python main.py --predict --odds --leagues PL,ECH,SA,SB,PD,BL1,FL1,NED,POR,MLS,BRA,ARG,J1,K1,AUS,UCL --days 3
       
       - name: Generate HTML page
@@ -64,5 +64,5 @@ jobs:
           git add data/*.csv 2>/dev/null || true
           git add src/models/*.joblib 2>/dev/null || true
           
-          # 【核心修复】：增加 git pull --rebase，在推送前先合并您在网页上修改的代码，防止冲突报错！
+          # 防冲突提交
           git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动更新预测结果并保存永久模型 $(date +%Y-%m-%d)" && git pull --rebase && git push)
