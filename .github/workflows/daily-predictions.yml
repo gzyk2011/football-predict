@@ -37,19 +37,18 @@ jobs:
       
       - name: Run predictions with odds and PushPlus
         env:
-          # 换成了最新的 API-Football 和 PushPlus 密钥
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         run: |
           export PYTHONPATH="${GITHUB_WORKSPACE}:${PYTHONPATH}"
-          echo "PYTHONPATH is: $PYTHONPATH"
-          echo "Working directory is: $(pwd)"
-          ls -la src/data/
           
-          # === 第一步：让机器人尝试训练（如果 src/models 已有模型，会自动跳过） ===
+          # 【极其关键的清理动作】：强制删除昨天遗留的旧预测数据，确保网页 100% 只读取今天的精选赛事！
+          rm -f data/value_bets_*.csv
+          
+          # 第一步：训练模型
           python main.py --train
           
-          # === 第二步：执行预测并发送推送（涵盖您需要的 16 个全球重点联赛） ===
+          # 第二步：执行预测并发送推送
           python main.py --predict --odds --leagues PL,ECH,SA,SB,PD,BL1,FL1,NED,POR,MLS,BRA,ARG,J1,K1,AUS,UCL --days 3
       
       - name: Generate HTML page
@@ -61,10 +60,8 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           
-          # 【核心修改】：分别添加文件，并允许部分文件不存在时不报错 (|| true) 解决128报错
           git add index.html || true
           git add data/*.csv 2>/dev/null || true
           git add src/models/*.joblib 2>/dev/null || true
           
-          # 检查是否有变化并提交
           git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动更新预测结果并保存永久模型 $(date +%Y-%m-%d)" && git push)
