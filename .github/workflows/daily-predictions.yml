@@ -1,6 +1,6 @@
 name: Daily Predictions Update
 
-on:
+于:
   schedule:
     # 每天的 UTC 时间 08:00 (北京时间下午 16:00) 自动运行
     - cron: '0 8 * * *'
