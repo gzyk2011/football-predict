@@ -49,8 +49,8 @@ jobs:
           # === 第一步：让机器人尝试训练（如果 src/models 已有模型，会自动跳过） ===
           python main.py --train
           
-          # === 第二步：执行预测并发送推送（这里建议把 leagues 参数写全，或者保持原样） ===
-          python main.py --predict --odds --leagues PL,SA,PD,BL1,FL1,UCL --days 3
+          # === 第二步：执行预测并发送推送（涵盖您需要的 16 个全球重点联赛） ===
+          python main.py --predict --odds --leagues PL,ECH,SA,SB,PD,BL1,FL1,NED,POR,MLS,BRA,ARG,J1,K1,AUS,UCL --days 3
       
       - name: Generate HTML page
         run: |
