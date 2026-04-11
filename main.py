@@ -269,20 +269,27 @@ def make_predictions(args):
         odds_data = odds_collector.get_multiple_leagues(leagues)
         
         if odds_data:
-            odds_collector.display_odds(odds_data)
-            
-            # Analyze value bets
             analyzer = OddsAnalyzer()
             value_bets = analyzer.find_value_bets(predictions, odds_data)
             
             if value_bets:
-                analyzer.display_value_bets(value_bets, top_n=10)
+                # 转为DataFrame处理
+                raw_value_df = analyzer.to_dataframe(value_bets)
                 
-                # Save to CSV
-                value_df = analyzer.to_dataframe(value_bets)
+                # ==========================================
+                # 【新增功能】：严格门槛过滤 (网页和微信双重生效)
+                # 过滤条件: 信心(confidence) >= 65% (0.65) 且 优势(edge) >= 15% (0.15)
+                # ==========================================
+                value_df = raw_value_df[(raw_value_df['confidence'] >= 0.65) & (raw_value_df['edge'] >= 0.15)].copy()
+                
+                # 无论是否为空，都必须保存CSV给网页读取（空数据会让网页显示今日0场）
                 output_file = config.DATA_DIR / f"value_bets_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 value_df.to_csv(output_file, index=False)
-                print(f"\n✓ Value bets saved to {output_file}")
+                
+                if not value_df.empty:
+                    print(f"\n✓ 过滤完成：筛选出 {len(value_df)} 场高标准赛事，已保存至 {output_file}")
+                else:
+                    print("\n✓ 过滤完成：今日暂无满足高标准 (信心≥65%且优势≥15%) 的赛事。")
             else:
                 print("No value bets found with current criteria.")
         else:
@@ -293,7 +300,7 @@ def make_predictions(args):
         print("="*80 + "\n")
 
     # ==========================================
-    # PushPlus 微信自动推送逻辑
+    # PushPlus 微信自动推送逻辑 (极简精炼直观版)
     # ==========================================
     push_token = os.getenv("PUSHPLUS_TOKEN", "")
     if push_token:
@@ -301,25 +308,47 @@ def make_predictions(args):
         print("正在生成报告并推送到微信 (PushPlus)...")
         print("="*80)
         
-        # 组装 HTML 格式的推送内容
-        push_html = "<h2>🔥 高胜率预测 (High Confidence)</h2>"
-        if not pred_df.empty:
-            push_html += pred_df.to_html(index=False, border=1, justify="center")
-        else:
-            push_html += "<p>今日暂无高胜率比赛。</p>"
-
-        if args.odds:
-            push_html += "<h2>💰 今日价值投注 (Value Bets)</h2>"
-            if not value_df.empty:
-                push_html += value_df.to_html(index=False, border=1, justify="center")
-            else:
-                push_html += "<p>今日暂无盘口漏洞 / 价值投注机会。</p>"
+        push_html = ""
         
+        # 只推送满足严格条件的赛事
+        if args.odds and not value_df.empty:
+            push_html += "<h3 style='color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 8px;'>🔥 严选高价值赛事推荐</h3>"
+            
+            for _, row in value_df.iterrows():
+                match_name = f"{row.get('home_team', '')} vs {row.get('away_team', '')}"
+                conf = float(row.get('confidence', 0)) * 100
+                edge = float(row.get('edge', 0)) * 100
+                outcome = row.get('outcome', '')
+                
+                # 时间转换：UTC转北京时间 (UTC+8)
+                try:
+                    utc_time = pd.to_datetime(row.get('date'))
+                    if utc_time.tzinfo is None:
+                        utc_time = utc_time.tz_localize('UTC')
+                    bj_time = utc_time.tz_convert('Asia/Shanghai').strftime('%m-%d %H:%M')
+                except Exception:
+                    bj_time = "时间格式未知"
+                
+                # 全新极简排版：双方队名 + 时间 + 推荐 + 信心价值
+                push_html += f"""
+                <div style="margin-bottom: 15px; border-radius: 6px; background-color: #f8f9fa; padding: 12px; border: 1px solid #e9ecef;">
+                    <div style="font-size: 16px; font-weight: bold; color: #34495e; margin-bottom: 8px;">⚽ {match_name}</div>
+                    <div style="font-size: 14px; color: #555; line-height: 1.8;">
+                        ⏰ 比赛时间: <span style="color: #333; font-weight: bold;">{bj_time}</span><br>
+                        🎯 推荐方向: <span style="color: #e74c3c; font-weight: bold; font-size: 15px;">{outcome}</span><br>
+                        💎 信心: <span style="font-weight: bold;">{conf:.1f}%</span> &nbsp;|&nbsp; 📈 价值: <span style="color: #27ae60; font-weight: bold;">+{edge:.1f}%</span>
+                    </div>
+                </div>
+                """
+        else:
+            # 如果没通过筛选，则下发这句提示
+            push_html = "<div style='text-align: center; padding: 20px; color: #7f8c8d; font-size: 15px;'>💡 今日暂无符合高标准（信心≥65% 且 价值≥15%）的赛事。</div>"
+            
         # 请求参数
         push_url = "http://www.pushplus.plus/send"
         push_data = {
             "token": push_token,
-            "title": f"⚽ 足球 AI 预测日报 ({pd.Timestamp.now().strftime('%m-%d')})",
+            "title": f"⚽ AI 核心赛程推荐 ({pd.Timestamp.now().strftime('%m-%d')})",
             "content": push_html,
             "template": "html"
         }
@@ -327,7 +356,7 @@ def make_predictions(args):
         try:
             res = requests.post(push_url, json=push_data)
             if res.status_code == 200 and res.json().get("code") == 200:
-                print("✓ 成功：预测报告已成功推送到您的微信！\n")
+                print("✓ 成功：格式化预测报告已推送到您的微信！\n")
             else:
                 print(f"⚠️ PushPlus 推送失败，返回信息: {res.text}\n")
         except Exception as e:
