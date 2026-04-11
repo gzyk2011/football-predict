@@ -60,6 +60,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           
+          # 【终极修复指令】：允许 Git 自动使用临时口袋收纳零碎文件，完美解决 unstaged 报错
+          git config --local rebase.autoStash true
+          
           git add index.html || true
           git add data/*.csv 2>/dev/null || true
           git add src/models/*.joblib 2>/dev/null || true
